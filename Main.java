@@ -31,11 +31,11 @@ public class Main {
             byte[] encrypted = cipher.doFinal(clean);
 
             // Combine IV and encrypted part.
-            byte[] encryptedIVAndText = new byte[iv.length + encrypted.length];
-            System.arraycopy(iv, 0, encryptedIVAndText, 0, iv.length);
-            System.arraycopy(encrypted, 0, encryptedIVAndText, iv.length, encrypted.length);
+            byte[] combinedIvCt = new byte[iv.length + encrypted.length];
+            System.arraycopy(iv, 0, combinedIvCt, 0, iv.length);
+            System.arraycopy(encrypted, 0, combinedIvCt, iv.length, encrypted.length);
 
-            return Base64.getEncoder().encodeToString(encryptedIVAndText);
+            return Base64.getEncoder().encodeToString(combinedIvCt);
         }
 
         /**
