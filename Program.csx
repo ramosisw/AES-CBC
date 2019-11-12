@@ -19,32 +19,17 @@ public class Program
         /// <returns>base64EncryptedIVData</returns>
         public static string Encrypt(string data, string key)
         {
-            byte[] iv;
-            byte[] encrypted;
             using (Aes aesAlg = Aes.Create())
             {
                 aesAlg.GenerateIV();
-                iv = aesAlg.IV;
 
-                Console.WriteLine($"iv: [{string.Join(", ", iv)}]");
-                var encryptor = GetCryptoTransform(aesAlg, true, key, iv);
-                using (var msEncrypt = new MemoryStream())
-                {
-                    using (var csEncrypt = new CryptoStream(msEncrypt, encryptor, CryptoStreamMode.Write))
-                    {
-                        using (var swEncrypt = new StreamWriter(csEncrypt))
-                        {
-                            swEncrypt.Write(data);
-                        }
-                        encrypted = msEncrypt.ToArray();
-                    }
-                }
+                Console.WriteLine($"iv: [{string.Join(", ", aesAlg.IV)}]");
+                var encrypted = Transform(aesAlg, true, key, aesAlg.IV, Encoding.UTF8.GetBytes(data));
+                var combinedIvCt = new byte[aesAlg.IV.Length + encrypted.Length];
+                Array.Copy(aesAlg.IV, 0, combinedIvCt, 0, aesAlg.IV.Length);
+                Array.Copy(encrypted, 0, combinedIvCt, aesAlg.IV.Length, encrypted.Length);
+                return Convert.ToBase64String(combinedIvCt);
             }
-
-            var combinedIvCt = new byte[iv.Length + encrypted.Length];
-            Array.Copy(iv, 0, combinedIvCt, 0, iv.Length);
-            Array.Copy(encrypted, 0, combinedIvCt, iv.Length, encrypted.Length);
-            return Convert.ToBase64String(combinedIvCt);
         }
 
         /// <summary>
@@ -56,7 +41,6 @@ public class Program
         public static string Decrypt(string base64EncryptedIVData, string key)
         {
             byte[] cipherTextCombined = Convert.FromBase64String(base64EncryptedIVData);
-            string plaintext = null;
             using (Aes aesAlg = Aes.Create())
             {
                 byte[] iv = new byte[16];
@@ -66,19 +50,8 @@ public class Program
                 Array.Copy(cipherTextCombined, iv.Length, cipherText, 0, cipherText.Length);
 
                 Console.WriteLine($"iv: [{string.Join(", ", iv)}]");
-                var decryptor = GetCryptoTransform(aesAlg, false, key, iv);
-                using (var msDecrypt = new MemoryStream(cipherText))
-                {
-                    using (var csDecrypt = new CryptoStream(msDecrypt, decryptor, CryptoStreamMode.Read))
-                    {
-                        using (var srDecrypt = new StreamReader(csDecrypt))
-                        {
-                            plaintext = srDecrypt.ReadToEnd();
-                        }
-                    }
-                }
+                return Encoding.UTF8.GetString(Transform(aesAlg, false, key, iv, cipherText));
             }
-            return plaintext;
         }
 
         static byte[] ComputeSha256Hash(string rawData)
@@ -89,13 +62,19 @@ public class Program
             }
         }
 
-        static ICryptoTransform GetCryptoTransform(Aes aesAlg, bool encrypt, string key, byte[] iv)
+        static byte[] Transform(Aes aesAlg, bool encrypt, string key, byte[] iv, byte[] bytes)
         {
             var keyDigest = ComputeSha256Hash(key);
             aesAlg.Mode = CipherMode.CBC;
             aesAlg.IV = iv;
             aesAlg.Key = keyDigest;
-            return encrypt ? aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV) : aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
+            var cryptoTransform = encrypt ? aesAlg.CreateEncryptor(aesAlg.Key, aesAlg.IV) : aesAlg.CreateDecryptor(aesAlg.Key, aesAlg.IV);
+            using (var memoryStream = new MemoryStream())
+            {
+                using (var cryptoStream = new CryptoStream(memoryStream, cryptoTransform, CryptoStreamMode.Write))
+                    cryptoStream.Write(bytes, 0, bytes.Length);
+                return memoryStream.ToArray();
+            }
         }
 
     }
